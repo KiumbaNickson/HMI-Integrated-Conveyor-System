@@ -72,7 +72,6 @@ The project therefore combines the control layer and supervisory interface into 
               │ Overload  │             │ Indicators│
               └───────────┘             └───────────┘
 ```
-			  
 ---
 
 ## PLC Control Logic
@@ -317,4 +316,5 @@ Automated Conveyor Sorting & Batching System
 │       ├── 01-hmi-motor-stopped-state.PNG
 │       └── 02-hmi-motor-running-state.PNG
 │
-└── README.md	  
+└── README.md
+```	  
