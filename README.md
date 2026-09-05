@@ -99,7 +99,7 @@ The motor control logic also incorporates the required stop and safety condition
 
 ### Motor Control Circuit
 
-![Motor Control Circuit](screenshots/OpenPLC/01-motor-control-circuit.PNG)
+![Motor Control Circuit](Screenshots/OpenPLC/01-motor-control-circuit.PNG)
 
 ---
 
