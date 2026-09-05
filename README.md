@@ -102,14 +102,26 @@ The motor control logic also incorporates the required stop and safety condition
 ![Motor Control Circuit](Screenshots/OpenPLC/01-motor-control-circuit.PNG)
 
 ---
+## 2. Product Sensor and Memory Circuit
 
-## 2. Motor Memory and Control Logic
+This circuit detects the presence of a product using the product sensor and stores the detection state in memory as the product continues travelling along the conveyor.
 
-A memory/latching section is used to maintain the required motor control state after the start command has been activated.
+Once a product is detected, the memory logic is activated to retain the detection information for a defined period using the configured timer (`SR0`).
 
-This allows the momentary start command to initiate motor operation while the control logic maintains the running state until a relevant stop condition or safety interlock occurs.
+This is important because the product sensor may return to its original state after the product moves past it. Without retaining the detection information, the PLC could lose track of the product before it reaches the next stage of the process.
 
-### Motor Memory Circuit
+The sensor and memory logic therefore ensures that:
+
+- A product is detected by the product sensor.
+- The detection event is stored in memory.
+- The stored state remains active for the configured time period.
+- The product can continue travelling toward the next processing stage.
+- Subsequent PLC logic can still act on the detected product even after the physical sensor state changes.
+
+This provides continuity between the initial product detection point and the subsequent processing stages of the conveyor system.
+
+---
+
 
 ![Motor Memory Circuit](Screenshots/OpenPLC/02-sensor-and-memory-circuit.PNG)
 
