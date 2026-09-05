@@ -111,7 +111,7 @@ This allows the momentary start command to initiate motor operation while the co
 
 ### Motor Memory Circuit
 
-![Motor Memory Circuit](screenshots/OpenPLC/02-motor-memory-circuit.PNG)
+![Motor Memory Circuit](Screenshots/OpenPLC/02-motor-memory-circuit.PNG)
 
 ---
 
@@ -125,7 +125,7 @@ The rejection logic controls the reject actuator to remove the sub-standard prod
 
 ### Sub-Standard Product Rejection
 
-![Sub-Standard Product Rejection](screenshots/OpenPLC/03-substandard-product-rejection.PNG)
+![Sub-Standard Product Rejection](Screenshots/OpenPLC/03-substandard-product-rejection.PNG)
 
 ---
 
@@ -146,11 +146,11 @@ Products within the configured acceptable range satisfy the weight condition and
 
 ### Weight Conditioning Circuit 1
 
-![Weight Conditioning Circuit 1](screenshots/OpenPLC/04-weight-conditioning-1.PNG)
+![Weight Conditioning Circuit 1](Screenshots/OpenPLC/04-weight-conditioning-1.PNG)
 
 ### Weight Conditioning Circuit 2
 
-![Weight Conditioning Circuit 2](screenshots/OpenPLC/05-weight-conditioning-2.PNG)
+![Weight Conditioning Circuit 2](Screenshots/OpenPLC/05-weight-conditioning-2.PNG)
 
 ---
 
@@ -164,7 +164,7 @@ The batching section provides the basis for monitoring production quantity and d
 
 ### Standard Products Batching
 
-![Standard Products Batching](screenshots/OpenPLC/06-standard-products-batching.PNG)
+![Standard Products Batching](Screenshots/OpenPLC/06-standard-products-batching.PNG)
 
 ---
 
@@ -210,7 +210,7 @@ This provides a communication interface between the PLC control layer and the op
 
 The Node-RED flow contains the communication and processing required to connect the HMI with the OpenPLC control system.
 
-![Complete Node-RED Flow](screenshots/Node-RED/01-complete-nodered-flow.PNG)
+![Complete Node-RED Flow](Screenshots/Node-RED/01-complete-nodered-flow.PNG)
 
 ---
 
@@ -228,7 +228,7 @@ The dashboard provides an operator-facing interface for issuing control commands
 
 The stopped-state dashboard provides a visual indication that the conveyor motor is not running.
 
-![HMI Motor Stopped State](screenshots/HMI/01-hmi-motor-stopped-state.PNG)
+![HMI Motor Stopped State](Screenshots/HMI/01-hmi-motor-stopped-state.PNG)
 
 ---
 
@@ -236,7 +236,7 @@ The stopped-state dashboard provides a visual indication that the conveyor motor
 
 When the motor is started and the required control conditions are satisfied, the HMI reflects the running state of the conveyor.
 
-![HMI Motor Running State](screenshots/HMI/02-hmi-motor-running-state.PNG)
+![HMI Motor Running State](Screenshots/HMI/02-hmi-motor-running-state.PNG)
 
 ---
 
