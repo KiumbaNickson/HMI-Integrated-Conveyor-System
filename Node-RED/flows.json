@@ -1,0 +1,1218 @@
+[
+    {
+        "id": "b815d73ef5abcb55",
+        "type": "tab",
+        "label": "CONVEYOR SORTING & BATCHING SYSTEM",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "9e275df43dd84718",
+        "type": "modbus-read",
+        "z": "b815d73ef5abcb55",
+        "name": "Register status",
+        "topic": "",
+        "showStatusActivities": false,
+        "logIOActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "",
+        "dataType": "HoldingRegister",
+        "adr": "0",
+        "quantity": "1",
+        "rate": "2",
+        "rateUnit": "s",
+        "delayOnStart": false,
+        "enableDeformedMessages": false,
+        "startDelayTime": "",
+        "server": "a074f7217e0c7777",
+        "useIOFile": false,
+        "ioFile": "",
+        "useIOForPayload": false,
+        "emptyMsgOnFail": false,
+        "x": 540,
+        "y": 800,
+        "wires": [
+            [
+                "76662f0a1e5ad5ab"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "76662f0a1e5ad5ab",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "function 1",
+        "func": "// 1. Retrieve or initialize context values\nlet coils = flow.get('coils') || [false, false, false, false];\nlet count = flow.get('count') || 0;\n\n// 2. Process Modbus Coils (%QX0.0 to %QX0.3)\nif (Array.isArray(msg.payload)) {\n    coils = msg.payload.map(val => Boolean(val));\n    flow.set('coils', coils);\n} else if (typeof msg.payload === 'object' && msg.payload !== null && msg.payload.data) {\n    coils = msg.payload.data.map(val => Boolean(val));\n    flow.set('coils', coils);\n}\n\n// 3. Process Modbus Holding Register (%MW0 - Batch Count)\nif (typeof msg.payload === 'number') {\n    count = msg.payload;\n    flow.set('count', count);\n} else if (Array.isArray(msg.payload) && typeof msg.payload[0] === 'number') {\n    count = msg.payload[0];\n    flow.set('count', count);\n} else if (typeof msg.payload === 'object' && msg.payload !== null && msg.payload.data) {\n    count = Number(msg.payload.data[0]) || 0;\n    flow.set('count', count);\n}\n\n// 4. Calculate 3-State Logic\n// %QX0.3 (coils[3]) indicates BATCH_COMPLETE_LAMP in OpenPLC\nlet isComplete = Boolean(coils[3]);\nlet statusString = \"IDLE\";\n\nif (isComplete) {\n    statusString = \"COMPLETE\";\n} else if (count > 0) {\n    statusString = \"IN PROGRESS\";\n}\n\n// 5. Send mapped signals to outputs\nreturn [\n    { payload: coils[0] },        // Output 1: MOTOR STATUS (%QX0.0)[cite: 1]\n    { payload: coils[1] },        // Output 2: LAMP_RUN (%QX0.1)[cite: 1]\n    { payload: coils[2] },        // Output 3: REJECT SELENOID (%QX0.2)[cite: 1]\n    {                             // Output 4: BATCH STATUS Dashboard UI Template[cite: 1]\n        payload: { \n            status: statusString, \n            count: count \n        } \n    }\n];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 740,
+        "y": 760,
+        "wires": [
+            [
+                "ce2ea7dfb5c2eff0"
+            ],
+            [],
+            [
+                "1010a99534f6c965"
+            ],
+            [
+                "585983dcb632f2e4"
+            ]
+        ]
+    },
+    {
+        "id": "1b38784f1e1e6685",
+        "type": "modbus-read",
+        "z": "b815d73ef5abcb55",
+        "name": "Coils Server",
+        "topic": "Status",
+        "showStatusActivities": false,
+        "logIOActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Coil",
+        "adr": "0",
+        "quantity": "4",
+        "rate": "2",
+        "rateUnit": "s",
+        "delayOnStart": false,
+        "enableDeformedMessages": false,
+        "startDelayTime": "",
+        "server": "a074f7217e0c7777",
+        "useIOFile": false,
+        "ioFile": "",
+        "useIOForPayload": false,
+        "emptyMsgOnFail": false,
+        "x": 550,
+        "y": 720,
+        "wires": [
+            [
+                "76662f0a1e5ad5ab"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "1b6b403422a3ff40",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "function 2",
+        "func": "// Array of 4 inputs read from Modbus starting at Address 2 (%IX0.2 to %IX0.5)\nconst inputs = msg.payload || [];\n\n// 1. Address 2 (%IX0.2) - ESTOP_OK (Normally Closed safety circuit)\nconst rawEstop = inputs[0] ?? false;\nconst estopHealthy = !rawEstop; // Inverted: True = Fault / Triggered\n\n// 2. Address 3 (%IX0.3) - OVRLOAD_OK (Normally Closed thermal overload)\nconst rawOverload = inputs[1] ?? false;\nconst overloadHealthy = !rawOverload; // Inverted: True = Trip / Fault\n\n// 3. Address 4 (%IX0.4) - PRODUCT_SENSOR (Normally Open photo-eye)\nconst productDetected = inputs[2] ?? false;\n\n// 4. Address 5 (%IX0.5) - QUALITY_SENSOR (Normally Open vision/check sensor)\nconst qualityStatus = inputs[3] ?? false;\n\n// Output messages for each dashboard indicator port\nconst msgEstop = { payload: estopHealthy };\nconst msgOverload = { payload: overloadHealthy };\nconst msgProduct = { payload: productDetected };\nconst msgQuality = { payload: qualityStatus };\n\n// Wire outputs 1 through 4\nreturn [msgEstop, msgOverload, msgProduct, msgQuality];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 540,
+        "wires": [
+            [
+                "87c972e312dea629"
+            ],
+            [
+                "77067a71fefac2ce"
+            ],
+            [
+                "c14a25b1f6c4c0de"
+            ],
+            [
+                "dfeb630361e77497"
+            ]
+        ]
+    },
+    {
+        "id": "148637ba42bece54",
+        "type": "modbus-read",
+        "z": "b815d73ef5abcb55",
+        "name": "Discrete Inputs Server",
+        "topic": "",
+        "showStatusActivities": true,
+        "logIOActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Input",
+        "adr": "2",
+        "quantity": "4",
+        "rate": "200",
+        "rateUnit": "ms",
+        "delayOnStart": false,
+        "enableDeformedMessages": false,
+        "startDelayTime": "",
+        "server": "a074f7217e0c7777",
+        "useIOFile": false,
+        "ioFile": "",
+        "useIOForPayload": false,
+        "emptyMsgOnFail": false,
+        "x": 560,
+        "y": 540,
+        "wires": [
+            [
+                "1b6b403422a3ff40"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "ce2ea7dfb5c2eff0",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "775a294f5d19e60a",
+        "page": "",
+        "ui": "",
+        "name": "MOTOR STATUS",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div class=\"indicator-container\">\n        <span class=\"indicator-label\">MOTOR STATUS</span>\n        <div class=\"indicator-lamp\" :class=\"{ 'active': msg?.payload }\"></div>\n        <span class=\"indicator-text\" :class=\"{ 'active-text': msg?.payload }\">\n            {{ msg?.payload ? 'RUNNING' : 'STOPPED' }}\n        </span>\n    </div>\n</template>\n\n<script>\n    export default {\n    data() {\n        return {\n            // Internal state managed automatically via Dashboard 2.0 msg binding\n        }\n    }\n}\n</script>\n\n<style>\n    .indicator-container {\n        display: flex;\n        flex-direction: column;\n        align-items: center;\n        justify-content: center;\n        padding: 12px;\n    }\n\n    .indicator-label {\n        font-weight: bold;\n        font-size: 13px;\n        color: #aaaaaa;\n        margin-bottom: 8px;\n    }\n\n    .indicator-lamp {\n        width: 48px;\n        height: 48px;\n        border-radius: 50%;\n        background-color: #333333;\n        border: 2px solid #555555;\n        transition: all 0.3s ease;\n    }\n\n    .indicator-lamp.active {\n        background-color: #00E676;\n        border-color: #00E676;\n        box-shadow: 0 0 16px #00E676;\n    }\n\n    .indicator-text {\n        margin-top: 8px;\n        font-weight: bold;\n        font-size: 12px;\n        color: #888888;\n    }\n\n    .indicator-text.active-text {\n        color: #00E676;\n    }\n</style>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 990,
+        "y": 740,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "87c972e312dea629",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "561c4e0283b13c9b",
+        "page": "",
+        "ui": "",
+        "name": "E-STOP INDICATOR",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #1e1e1e; border-radius: 6px;\"\n         :style=\"{ 'border-left': '8px solid ' + (estopHealthy ? '#4caf50' : '#f44336') }\">\n        \n        <div style=\"display: flex; align-items: center; gap: 10px;\">\n            <span style=\"height: 16px; width: 16px; border-radius: 50%; display: inline-block;\"\n                  :style=\"{ 'background-color': estopHealthy ? '#4caf50' : '#f44336', 'box-shadow': '0 0 8px ' + (estopHealthy ? '#4caf50' : '#f44336') }\">\n            </span>\n            <span style=\"font-weight: bold; font-size: 14px; color: #ffffff;\">EMERGENCY STOP</span>\n        </div>\n\n        <span style=\"font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; color: #ffffff;\"\n              :style=\"{ 'background-color': estopHealthy ? '#2e7d32' : '#d32f2f' }\">\n            {{ estopHealthy ? 'E-STOP HEALTHY' : 'EMERGENCY STOP TRIPPED' }}\n        </span>\n    </div>\n</template>\n\n<script>\nexport default {\n    data() {\n        return {\n            // Receives boolean directly from function 2 payload\n            estopHealthy: true \n        }\n    },\n    watch: {\n        msg: {\n            handler(msg) {\n                if (msg && msg.payload !== undefined) {\n                    // Update reactive state whenever a new payload arrives\n                    this.estopHealthy = Boolean(msg.payload);\n                }\n            },\n            immediate: true,\n            deep: true\n        }\n    }\n}\n</script>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 940,
+        "y": 480,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "77067a71fefac2ce",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "561c4e0283b13c9b",
+        "page": "",
+        "ui": "",
+        "name": "MOTOR OVERLOAD STATUS",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #1e1e1e; border-radius: 6px; margin-top: 8px;\"\n        :style=\"{ 'border-left': '8px solid ' + (overloadHealthy ? '#4caf50' : '#f44336') }\">\n\n        <div style=\"display: flex; align-items: center; gap: 10px;\">\n            <span style=\"height: 16px; width: 16px; border-radius: 50%; display: inline-block;\"\n                  :style=\"{ 'background-color': overloadHealthy ? '#4caf50' : '#f44336', 'box-shadow': '0 0 8px ' + (overloadHealthy ? '#4caf50' : '#f44336') }\">\n            </span>\n            <span style=\"font-weight: bold; font-size: 14px; color: #ffffff;\">MOTOR OVERLOAD</span>\n        </div>\n\n        <span style=\"font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; color: #ffffff;\"\n              :style=\"{ 'background-color': overloadHealthy ? '#2e7d32' : '#d32f2f' }\">\n            {{ overloadHealthy ? 'OVERLOAD HEALTHY' : 'OVERLOAD TRIPPED' }}\n        </span>\n    </div>\n</template>\n\n<script>\n    export default {\n    data() {\n        return {\n            overloadHealthy: true\n        }\n    },\n    watch: {\n        msg: {\n            handler(msg) {\n                if (msg && msg.payload !== undefined) {\n                    this.overloadHealthy = Boolean(msg.payload);\n                }\n            },\n            immediate: true,\n            deep: true\n        }\n    }\n}\n</script>\n    ",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 990,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "c14a25b1f6c4c0de",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "95a2e44c6ed2980f",
+        "page": "",
+        "ui": "",
+        "name": "PRODUCT DETECT",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #1e1e1e; border-radius: 6px; border-left: 8px solid #2196f3;\"\n        :style=\"{ 'border-left-color': status ? '#2196f3' : '#424242' }\">\n\n        <div style=\"display: flex; align-items: center; gap: 10px;\">\n            <span style=\"height: 16px; width: 16px; border-radius: 50%; display: inline-block; transition: all 0.3s;\"\n                  :style=\"{ 'background-color': status ? '#21b8f3ff' : '#424242', 'box-shadow': status ? '0 0 10px #2196f3' : 'none' }\">\n            </span>\n            <span style=\"font-weight: bold; font-size: 14px; color: #ffffff;\">PRODUCT SENSOR </span>\n        </div>\n\n        <span style=\"font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; color: #ffffff; transition: all 0.3s;\"\n              :style=\"{ 'background-color': status ? '#1976d2' : '#333333' }\">\n            {{ status ? 'DETECTING' : 'CLEAR' }}\n        </span>\n    </div>\n</template>\n\n<script>\n    export default {\n    data() {\n        return {\n            status: false\n        }\n    },\n    watch: {\n        msg: {\n            handler(msg) {\n                if (msg && msg.payload !== undefined) {\n                    this.status = Boolean(msg.payload);\n                }\n            },\n            immediate: true,\n            deep: true\n        }\n    }\n}\n</script>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 960,
+        "y": 560,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "dfeb630361e77497",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "95a2e44c6ed2980f",
+        "page": "",
+        "ui": "",
+        "name": "QUALITY DETECTION",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #1e1e1e; border-radius: 6px; border-left: 8px solid #9c27b0;\"\n        :style=\"{ 'border-left-color': status ? '#2789b0ff' : '#424242' }\">\n\n        <div style=\"display: flex; align-items: center; gap: 10px;\">\n            <span style=\"height: 16px; width: 16px; border-radius: 50%; display: inline-block; transition: all 0.3s;\"\n                  :style=\"{ 'background-color': status ? '#2775b0ff' : '#424242', 'box-shadow': status ? '0 0 10px #9c27b0' : 'none' }\">\n            </span>\n            <span style=\"font-weight: bold; font-size: 14px; color: #ffffff;\">QUALITY SENSOR </span>\n        </div>\n\n        <span style=\"font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; color: #ffffff; transition: all 0.3s;\"\n              :style=\"{ 'background-color': status ? '#1f69a2ff' : '#333333' }\">\n            {{ status ? 'PASSED' : 'WAITING/REJECT' }}\n        </span>\n    </div>\n</template>\n\n<script>\n    export default {\n    data() {\n        return {\n            status: false\n        }\n    },\n    watch: {\n        msg: {\n            handler(msg) {\n                if (msg && msg.payload !== undefined) {\n                    this.status = Boolean(msg.payload);\n                }\n            },\n            immediate: true,\n            deep: true\n        }\n    }\n}\n</script>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 970,
+        "y": 600,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1010a99534f6c965",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "c08c2606c2842317",
+        "page": "",
+        "ui": "",
+        "name": "REJECT SELENOID",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<template>\n    <div style=\"display: flex; align-items: center; justify-content: space-between; padding: 12px; background-color: #1e1e1e; border-radius: 6px; border-left: 8px solid #f44336;\"\n        :style=\"{ 'border-left-color': status ? '#f44336' : '#424242' }\">\n\n        <div style=\"display: flex; align-items: center; gap: 10px;\">\n            <span style=\"height: 16px; width: 16px; border-radius: 50%; display: inline-block; transition: all 0.3s;\"\n                  :style=\"{ 'background-color': status ? '#f44336' : '#424242', 'box-shadow': status ? '0 0 10px #f44336' : 'none' }\">\n            </span>\n            <span style=\"font-weight: bold; font-size: 14px; color: #ffffff;\">REJECT SOLENOID </span>\n        </div>\n\n        <span style=\"font-size: 12px; font-weight: bold; padding: 6px 12px; border-radius: 4px; color: #ffffff; transition: all 0.3s;\"\n              :style=\"{ 'background-color': status ? '#d32f2f' : '#333333' }\">\n            {{ status ? 'EJECTING' : 'IDLE' }}\n        </span>\n    </div>\n</template>\n\n<script>\n    export default {\n    data() {\n        return {\n            status: false\n        }\n    },\n    watch: {\n        msg: {\n            handler(msg) {\n                if (msg && msg.payload !== undefined) {\n                    this.status = Boolean(msg.payload);\n                }\n            },\n            immediate: true,\n            deep: true\n        }\n    }\n}\n</script>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1000,
+        "y": 780,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fb63dfdbd57266ae",
+        "type": "ui-number-input",
+        "z": "b815d73ef5abcb55",
+        "group": "78be3b2a45c15ca2",
+        "name": "WEIGHT INPUT",
+        "label": "WEIGHT INPUT ",
+        "order": 4,
+        "width": 0,
+        "height": 0,
+        "topic": "topic",
+        "topicType": "msg",
+        "min": 0,
+        "max": "100",
+        "step": "0.01",
+        "tooltip": "",
+        "delay": 300,
+        "passthru": true,
+        "sendOnDelay": false,
+        "sendOnBlur": true,
+        "sendOnEnter": true,
+        "className": "",
+        "clearable": false,
+        "icon": "",
+        "iconPosition": "left",
+        "iconInnerPosition": "inside",
+        "spinner": "default",
+        "x": 1420,
+        "y": 240,
+        "wires": [
+            [
+                "642a64d353f140fe"
+            ]
+        ]
+    },
+    {
+        "id": "74b69c0474522d1c",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "MHoldingRegisters",
+        "adr": "1",
+        "quantity": "2",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 1840,
+        "y": 240,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "642a64d353f140fe",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "WEIGHT CONVERSION",
+        "func": "// Convert dashboard input to a float number\nlet weight = parseFloat(msg.payload);\n\n// Allocate a 4-byte buffer for a 32-bit IEEE 754 REAL\nlet buf = Buffer.alloc(4);\nbuf.writeFloatBE(weight, 0); // Big-Endian format matching OpenPLC\n\n// Output as two 16-bit unsigned integers for FC 16\nmsg.payload = [\n    buf.readUInt16BE(0), // High word (Registers 40001 / %MD0)\n    buf.readUInt16BE(2)  // Low word  (Registers 40002)\n];\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1630,
+        "y": 240,
+        "wires": [
+            [
+                "74b69c0474522d1c"
+            ]
+        ]
+    },
+    {
+        "id": "1768882b826ea5e7",
+        "type": "ui-number-input",
+        "z": "b815d73ef5abcb55",
+        "group": "78be3b2a45c15ca2",
+        "name": "MIN WEIGHT ",
+        "label": "MIN WEIGHT LIMIT ",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "topic": "topic",
+        "topicType": "msg",
+        "min": 0,
+        "max": "100",
+        "step": "0.01",
+        "tooltip": "",
+        "delay": 300,
+        "passthru": true,
+        "sendOnDelay": false,
+        "sendOnBlur": true,
+        "sendOnEnter": true,
+        "className": "",
+        "clearable": false,
+        "icon": "",
+        "iconPosition": "left",
+        "iconInnerPosition": "inside",
+        "spinner": "default",
+        "x": 1420,
+        "y": 300,
+        "wires": [
+            [
+                "2573bacd3eafb668"
+            ]
+        ]
+    },
+    {
+        "id": "302ab4f64b8a2249",
+        "type": "ui-number-input",
+        "z": "b815d73ef5abcb55",
+        "group": "78be3b2a45c15ca2",
+        "name": "MAX WEIGHT ",
+        "label": "MAX WEIGHT LIMIT ",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "topic": "topic",
+        "topicType": "msg",
+        "min": 0,
+        "max": "100",
+        "step": "0.01",
+        "tooltip": "",
+        "delay": 300,
+        "passthru": true,
+        "sendOnDelay": false,
+        "sendOnBlur": true,
+        "sendOnEnter": true,
+        "className": "",
+        "clearable": false,
+        "icon": "",
+        "iconPosition": "left",
+        "iconInnerPosition": "inside",
+        "spinner": "default",
+        "x": 1420,
+        "y": 380,
+        "wires": [
+            [
+                "14c832fab5a53f0a"
+            ]
+        ]
+    },
+    {
+        "id": "8cab5ba11284505f",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "MIN WEIGHT",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "MHoldingRegisters",
+        "adr": "5",
+        "quantity": "2",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 1840,
+        "y": 300,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "655be669795afc92",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "MAX WEIGHT",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "MHoldingRegisters",
+        "adr": "9",
+        "quantity": "2",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 1840,
+        "y": 380,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "14c832fab5a53f0a",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "WEIGHT LIMITS(CONV)",
+        "func": "let limitValue = parseFloat(msg.payload);\n\n// Convert float to 4-byte Big-Endian buffer\nlet buf = Buffer.alloc(4);\nbuf.writeFloatBE(limitValue, 0);\n\n// Output two 16-bit integers for Modbus FC16\nmsg.payload = [\n    buf.readUInt16BE(0),\n    buf.readUInt16BE(2)\n];\n\nreturn msg;",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1630,
+        "y": 380,
+        "wires": [
+            [
+                "655be669795afc92"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "2573bacd3eafb668",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "WEIGHT LIMITS(CONV)",
+        "func": "let limitValue = parseFloat(msg.payload);\n\n// Convert float to 4-byte Big-Endian buffer\nlet buf = Buffer.alloc(4);\nbuf.writeFloatBE(limitValue, 0);\n\n// Output two 16-bit integers for Modbus FC16\nmsg.payload = [\n    buf.readUInt16BE(0),\n    buf.readUInt16BE(2)\n];\n\nreturn msg;",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1630,
+        "y": 300,
+        "wires": [
+            [
+                "8cab5ba11284505f"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "be25f4ed324ed7d9",
+        "type": "modbus-read",
+        "z": "b815d73ef5abcb55",
+        "name": "WEIGHT STATUS",
+        "topic": "",
+        "showStatusActivities": false,
+        "logIOActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Coil",
+        "adr": "4",
+        "quantity": "1",
+        "rate": "1",
+        "rateUnit": "s",
+        "delayOnStart": false,
+        "enableDeformedMessages": false,
+        "startDelayTime": "",
+        "server": "a074f7217e0c7777",
+        "useIOFile": false,
+        "ioFile": "",
+        "useIOForPayload": false,
+        "emptyMsgOnFail": false,
+        "x": 1410,
+        "y": 460,
+        "wires": [
+            [
+                "cca6aa551e047b3b"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "cca6aa551e047b3b",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "function 3",
+        "func": "// Extract coil array output to simple true/false\nmsg.payload = msg.payload[0] === true || msg.payload[0] === 1;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1600,
+        "y": 460,
+        "wires": [
+            [
+                "fe3fab7806dd9d0d"
+            ]
+        ]
+    },
+    {
+        "id": "fe3fab7806dd9d0d",
+        "type": "ui-text",
+        "z": "b815d73ef5abcb55",
+        "group": "78be3b2a45c15ca2",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "WEIGHT VERIFICATION STATUS",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "style": true,
+        "font": "Arial,Arial,Helvetica,sans-serif",
+        "fontSize": "20",
+        "color": "#261cba",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 1820,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "read_mw10_counter",
+        "type": "modbus-read",
+        "z": "b815d73ef5abcb55",
+        "name": "BATCH COUNT",
+        "topic": "",
+        "showStatusActivities": false,
+        "logIOActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "HoldingRegister",
+        "adr": "0",
+        "quantity": "1",
+        "rate": "1",
+        "rateUnit": "s",
+        "delayOnStart": false,
+        "enableDeformedMessages": false,
+        "startDelayTime": "",
+        "server": "a074f7217e0c7777",
+        "useIOFile": false,
+        "ioFile": "",
+        "useIOForPayload": false,
+        "emptyMsgOnFail": false,
+        "x": 1490,
+        "y": 620,
+        "wires": [
+            [
+                "parse_mw10"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "parse_mw10",
+        "type": "function",
+        "z": "b815d73ef5abcb55",
+        "name": "Format Word",
+        "func": "msg.payload = msg.payload[0];\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1670,
+        "y": 620,
+        "wires": [
+            [
+                "ui_db2_text_counter"
+            ]
+        ]
+    },
+    {
+        "id": "ui_db2_text_counter",
+        "type": "ui-text",
+        "z": "b815d73ef5abcb55",
+        "group": "c08c2606c2842317",
+        "order": 1,
+        "width": "",
+        "height": "",
+        "name": "Batch Counter Display",
+        "label": "BATCH COUNT DISPLAY",
+        "format": "{{msg.payload}} Units",
+        "layout": "row-spread",
+        "style": false,
+        "font": "",
+        "fontSize": "",
+        "color": "#000000",
+        "wrapText": false,
+        "className": "",
+        "value": "payload",
+        "valueType": "msg",
+        "x": 1860,
+        "y": 620,
+        "wires": []
+    },
+    {
+        "id": "585983dcb632f2e4",
+        "type": "ui-template",
+        "z": "b815d73ef5abcb55",
+        "group": "c08c2606c2842317",
+        "page": "",
+        "ui": "",
+        "name": "BATCH STATUS",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "head": "",
+        "format": "<div style=\"\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    background-color: rgba(20, 20, 21, 1);\n    padding: 10px 14px;\n    border-radius: 6px;\n    width: 100%;\n    box-sizing: border-box;\n\">\n    <div style=\"display: flex; align-items: center; gap: 10px;\">\n        <!-- Status Indicator Circle -->\n        <span style=\"width: 12px; height: 12px; border-radius: 50%; display: inline-block;\"\n              ng-style=\"{'background-color': (msg.payload.status === 'COMPLETE') ? '#4CAF50' : ((msg.payload.status === 'IN PROGRESS') ? '#2196F3' : '#FF9800')}\">\n        </span>\n\n        <span style=\"\n            color: #ffffff;\n            font-weight: 700;\n            font-size: 13px;\n            letter-spacing: 0.6px;\n            font-family: Roboto, sans-serif;\n            text-transform: uppercase;\n        \">BATCH STATUS</span>\n    </div>\n\n    <!-- Status Badge Container with Dynamic Text Color -->\n    <div style=\"\n        background-color: #d9d210ff;\n        padding: 4px 10px;\n        border-radius: 4px;\n        font-weight: 700;\n        font-size: 12px;\n        font-family: Roboto, sans-serif;\n        text-transform: uppercase;\n        letter-spacing: 0.5px;\n    \"\n        ng-style=\"{'color': (msg.payload.status === 'COMPLETE') ? '#4CAF50' : ((msg.payload.status === 'IN PROGRESS') ? '#2196F3' : '#FF9800')}\">\n\n        <span>{{msg.payload.status === 'IN PROGRESS' ? ('IN PROGRESS (' + msg.payload.count + '/5)') : msg.payload.status}}</span>\n    </div>\n</div>",
+        "storeOutMessages": true,
+        "passthru": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 980,
+        "y": 820,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "bb9acf3fcddd5af2",
+        "type": "ui-button",
+        "z": "b815d73ef5abcb55",
+        "group": "775a294f5d19e60a",
+        "name": "HMI START",
+        "label": "START MOTOR",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "emulateClick": true,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "true",
+        "payloadType": "bool",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "green",
+        "textColor": "blue",
+        "iconColor": "yellow",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 570,
+        "y": 240,
+        "wires": [
+            [
+                "d6954c1c797e460d"
+            ]
+        ]
+    },
+    {
+        "id": "b735f2cfdb13d1e0",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Coil",
+        "adr": "32",
+        "quantity": "1",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 960,
+        "y": 240,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "c08402985b6c7bec",
+        "type": "ui-button",
+        "z": "b815d73ef5abcb55",
+        "group": "775a294f5d19e60a",
+        "name": "HMI STOP",
+        "label": "STOP MOTOR",
+        "order": 3,
+        "width": 0,
+        "height": 0,
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "iconPosition": "left",
+        "payload": "true",
+        "payloadType": "bool",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "",
+        "textColor": "",
+        "iconColor": "",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 510,
+        "y": 300,
+        "wires": [
+            [
+                "ad937bf4b617d6d6"
+            ]
+        ]
+    },
+    {
+        "id": "2ac3d1b15e2b40be",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Coil",
+        "adr": "33",
+        "quantity": "1",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 860,
+        "y": 300,
+        "wires": [
+            [
+                "13f4fc16190c5c75"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "d6954c1c797e460d",
+        "type": "change",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "true",
+                "tot": "bool"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 760,
+        "y": 240,
+        "wires": [
+            [
+                "b735f2cfdb13d1e0"
+            ]
+        ]
+    },
+    {
+        "id": "ad937bf4b617d6d6",
+        "type": "change",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "true",
+                "tot": "bool"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 680,
+        "y": 300,
+        "wires": [
+            [
+                "2ac3d1b15e2b40be"
+            ]
+        ]
+    },
+    {
+        "id": "13f4fc16190c5c75",
+        "type": "delay",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "2",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 1020,
+        "y": 300,
+        "wires": [
+            [
+                "4ff5654c3ac11178"
+            ]
+        ]
+    },
+    {
+        "id": "4ff5654c3ac11178",
+        "type": "change",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "payload",
+                "pt": "msg",
+                "to": "false",
+                "tot": "bool"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 840,
+        "y": 360,
+        "wires": [
+            [
+                "9e0f751d36bdcda6"
+            ]
+        ]
+    },
+    {
+        "id": "9e0f751d36bdcda6",
+        "type": "modbus-write",
+        "z": "b815d73ef5abcb55",
+        "name": "",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "showWarnings": true,
+        "unitid": "1",
+        "dataType": "Coil",
+        "adr": "33",
+        "quantity": "1",
+        "server": "a074f7217e0c7777",
+        "emptyMsgOnFail": false,
+        "keepMsgProperties": false,
+        "delayOnStart": false,
+        "startDelayTime": "",
+        "x": 1020,
+        "y": 360,
+        "wires": [
+            [],
+            []
+        ]
+    },
+    {
+        "id": "bc19d08cbaac5aeb",
+        "type": "comment",
+        "z": "b815d73ef5abcb55",
+        "name": "Rung 1: Dashboard Motor control (Write)",
+        "info": "",
+        "x": 780,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "418b9efa06e99986",
+        "type": "comment",
+        "z": "b815d73ef5abcb55",
+        "name": "Rung 2: Discrete Inputs Status indicators (Read)",
+        "info": "",
+        "x": 760,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "b1be5dcc23fe9473",
+        "type": "comment",
+        "z": "b815d73ef5abcb55",
+        "name": "Rung 3: Coils Status indicators (Read)",
+        "info": "",
+        "x": 770,
+        "y": 660,
+        "wires": []
+    },
+    {
+        "id": "4f335b7c2b328be0",
+        "type": "comment",
+        "z": "b815d73ef5abcb55",
+        "name": "Rung 4: Weight comparison & Verification",
+        "info": "",
+        "x": 1640,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "148217eaa3fdb08c",
+        "type": "comment",
+        "z": "b815d73ef5abcb55",
+        "name": "Rung 5: Batch Count Indicator",
+        "info": "",
+        "x": 1680,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "a074f7217e0c7777",
+        "type": "modbus-client",
+        "name": "",
+        "clienttype": "tcp",
+        "bufferCommands": true,
+        "stateLogEnabled": false,
+        "queueLogEnabled": false,
+        "failureLogEnabled": true,
+        "tcpHost": "127.0.0.1",
+        "tcpPort": "5020",
+        "tcpType": "DEFAULT",
+        "serialPort": "/dev/ttyUSB",
+        "serialType": "RTU-BUFFERD",
+        "serialBaudrate": 9600,
+        "serialDatabits": 8,
+        "serialStopbits": 1,
+        "serialParity": "none",
+        "serialConnectionDelay": 100,
+        "serialAsciiResponseStartDelimiter": "0x3A",
+        "unit_id": 1,
+        "commandDelay": 1,
+        "clientTimeout": 1000,
+        "reconnectOnTimeout": true,
+        "reconnectTimeout": 2000,
+        "parallelUnitIdsAllowed": true,
+        "showErrors": false,
+        "showWarnings": true,
+        "showLogs": true
+    },
+    {
+        "id": "775a294f5d19e60a",
+        "type": "ui-group",
+        "name": "MOTOR CONTROL",
+        "page": "0a3c244f004be348",
+        "width": "3",
+        "height": 1,
+        "order": 2,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "561c4e0283b13c9b",
+        "type": "ui-group",
+        "name": "MOTOR PERMISSIVES",
+        "page": "0a3c244f004be348",
+        "width": "4",
+        "height": 1,
+        "order": 1,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "95a2e44c6ed2980f",
+        "type": "ui-group",
+        "name": "SENSORS",
+        "page": "0a3c244f004be348",
+        "width": "4",
+        "height": 1,
+        "order": 3,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "c08c2606c2842317",
+        "type": "ui-group",
+        "name": "BATCH INFO",
+        "page": "0a3c244f004be348",
+        "width": 6,
+        "height": 1,
+        "order": 5,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "78be3b2a45c15ca2",
+        "type": "ui-group",
+        "name": "WEIGHT VERIFICATION",
+        "page": "0a3c244f004be348",
+        "width": 6,
+        "height": 1,
+        "order": 4,
+        "showTitle": true,
+        "className": "",
+        "visible": "true",
+        "disabled": "false",
+        "groupType": "default"
+    },
+    {
+        "id": "0a3c244f004be348",
+        "type": "ui-page",
+        "name": "Page 1",
+        "ui": "da40b4170965a4cc",
+        "path": "/page1",
+        "icon": "home",
+        "layout": "grid",
+        "theme": "42a4625ca125d75f",
+        "breakpoints": [
+            {
+                "name": "Default",
+                "px": 0,
+                "cols": 3
+            },
+            {
+                "name": "Tablet",
+                "px": 576,
+                "cols": 6
+            },
+            {
+                "name": "Small Desktop",
+                "px": 768,
+                "cols": 9
+            },
+            {
+                "name": "Desktop",
+                "px": 1024,
+                "cols": 12
+            }
+        ],
+        "order": 1,
+        "className": "",
+        "visible": "true",
+        "disabled": "false"
+    },
+    {
+        "id": "da40b4170965a4cc",
+        "type": "ui-base",
+        "name": "My Dashboard",
+        "path": "/dashboard",
+        "appIcon": "",
+        "includeClientData": true,
+        "acceptsClientConfig": [
+            "ui-notification",
+            "ui-control"
+        ],
+        "showPathInSidebar": false,
+        "headerContent": "page",
+        "navigationStyle": "default",
+        "titleBarStyle": "default",
+        "showReconnectNotification": true,
+        "notificationDisplayTime": 1,
+        "showDisconnectNotification": true,
+        "allowInstall": false
+    },
+    {
+        "id": "42a4625ca125d75f",
+        "type": "ui-theme",
+        "name": "Default Theme",
+        "colors": {
+            "surface": "#ffffff",
+            "primary": "#0094CE",
+            "bgPage": "#eeeeee",
+            "groupBg": "#ffffff",
+            "groupOutline": "#cccccc"
+        },
+        "sizes": {
+            "density": "default",
+            "pagePadding": "12px",
+            "groupGap": "12px",
+            "groupBorderRadius": "4px",
+            "widgetGap": "12px"
+        }
+    },
+    {
+        "id": "eeaf0b1d70ddd328",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-modbus": "5.60.2",
+            "@flowfuse/node-red-dashboard": "1.30.2"
+        }
+    }
+]
