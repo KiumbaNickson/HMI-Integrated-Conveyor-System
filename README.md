@@ -111,7 +111,7 @@ This allows the momentary start command to initiate motor operation while the co
 
 ### Motor Memory Circuit
 
-![Motor Memory Circuit](Screenshots/OpenPLC/02-motor-memory-circuit.PNG)
+![Motor Memory Circuit](Screenshots/OpenPLC/02-sensor-and-memory-circuit.PNG)
 
 ---
 
@@ -125,7 +125,7 @@ The rejection logic controls the reject actuator to remove the sub-standard prod
 
 ### Sub-Standard Product Rejection
 
-![Sub-Standard Product Rejection](Screenshots/OpenPLC/03-substandard-product-rejection.PNG)
+![Sub-Standard Product Rejection](Screenshots/OpenPLC/03-substandard-product-rejection-circuit.PNG)
 
 ---
 
@@ -146,11 +146,11 @@ Products within the configured acceptable range satisfy the weight condition and
 
 ### Weight Conditioning Circuit 1
 
-![Weight Conditioning Circuit 1](Screenshots/OpenPLC/04-weight-conditioning-1.PNG)
+![Weight Conditioning Circuit 1](Screenshots/OpenPLC/04-weight-conditioning-circuit.PNG)
 
 ### Weight Conditioning Circuit 2
 
-![Weight Conditioning Circuit 2](Screenshots/OpenPLC/05-weight-conditioning-2.PNG)
+![Weight Conditioning Circuit 2](Screenshots/OpenPLC/05-weight-conditioning-circuit-2.PNG)
 
 ---
 
