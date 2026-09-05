@@ -71,6 +71,7 @@ The project therefore combines the control layer and supervisory interface into 
               │ E-Stop    │             │ Solenoid  │
               │ Overload  │             │ Indicators│
               └───────────┘             └───────────┘
+```
 			  
 ---
 
@@ -181,6 +182,7 @@ This creates a communication path between the PLC control layer and the operator
 │                         │
 │  Control & Processing   │
 └─────────────────────────┘
+```
 ---
 
 # Human Machine Interface (HMI)
@@ -230,7 +232,7 @@ Motor Control
     │
     ▼
 HMI Status Feedback	
-
+```
 ---
 
 # Modbus TCP Communication
@@ -279,7 +281,7 @@ OpenPLC Ladder Logic
       │
       ▼
 Motor Control	
-
+```
 ---
 
 # Project Structure
